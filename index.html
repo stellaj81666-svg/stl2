@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>HR智慧看板 - 全景数据分析</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    }
+
+    /* 通用图表容器，锁定 16:9 比例，防止 Canvas 拉伸变形，并居中 Canvas */
+    .chart-box-container {
+      position: relative;
+      width: 100%;
+      /* 参考 UI 图，大多数图表保持此比例较美观 */
+      aspect-ratio: 16 / 9; 
+      display: flex;
+      align-items: center;  /* 垂直居中 */
+      justify-content: center; /* 水平居中 */
+    }
+
+    /* 限制 Canvas 尺寸不超过容器 */
+    .chart-box-container canvas {
+      max-width: 100% !important;
+      max-height: 100% !important;
+    }
+
+    /* Tab 动画滑块效果 */
+    .tab-active-bg {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    /* 自定义莫兰迪色系（参考参考图） */
+    :root {
+      --color-primary: #5154E8;
+      --color-success: #6EE7B7;
+      --color-warning: #FBBF24;
+      --color-danger: #F87171;
+      --morandi-1: #A3A6F4;
+      --morandi-2: #84E2D1;
+      --morandi-3: #FCD982;
+      --morandi-4: #FCA5A5;
+      --morandi-5: #94A3B8;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased">
+
+<div class="max-w-screen-2xl mx-auto p-4 md:p-8">
+
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-950 tracking-tight">HR智慧看板</h1>
+      <p class="text-sm text-slate-500 mt-1">人力资源全景数据分析平台 · 2025 年度概览</p>
+    </div>
+    <div class="flex flex-wrap gap-2.5">
+      <button class="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors">
+        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+        可视化看板
+      </button>
+      <button class="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors">
+        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+        数据中心
+      </button>
+      <label class="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium cursor-pointer text-slate-700 bg-white hover:bg-slate-50 transition-colors">
+        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+        导入数据
+        <input type="file" id="importFile" class="hidden" accept=".json,.csv" />
+      </label>
+      <button onclick="exportPNG()" class="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors">
+        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+        导出图像
+      </button>
+      <button class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold shadow-md shadow-indigo-100 hover:bg-indigo-700 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+        保存报告
+      </button>
+    </div>
+  </div>
+
+  <div class="relative bg-white p-1.5 rounded-2xl shadow-inner border border-slate-100 flex gap-1 mb-8 w-full sm:w-fit overflow-x-auto">
+    <div id="tabSlider" class="absolute inset-y-1.5 rounded-xl bg-indigo-50 border border-indigo-100 tab-active-bg" style="width: 0; left: 0;"></div>
+    
+    <button onclick="show('p2', this)" class="tab relative px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap z-10 text-slate-600 transition-colors duration-200">
+      <span class="flex items-center gap-2">💰 薪资Benchmark</span>
+    </button>
+    <button onclick="show('p3', this)" class="tab relative px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap z-10 text-slate-600 transition-colors duration-200">
+      <span class="flex items-center gap-2">📊 招聘渠道ROI</span>
+    </button>
+    <button onclick="show('p4', this)" class="tab relative px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap z-10 text-indigo-700 transition-colors duration-200" id="defaultTab">
+      <span class="flex items-center gap-2">🔍 人才库匹配</span>
+    </button>
+    <button onclick="show('p5', this)" class="tab relative px-6 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap z-10 text-slate-600 transition-colors duration-200">
+      <span class="flex items-center gap-2">⚠️ 离职风险预测</span>
+    </button>
+  </div>
+
+  <div id="p2" class="tab-content hidden animate-fade-in">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center gap-4">
+        <div class="p-4 rounded-2xl bg-indigo-50 text-indigo-600">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">公司平均薪资</p>
+          <p class="text-3xl font-extrabold text-slate-950 mt-1">19.4k<span class="text-lg font-normal text-slate-400">/月</span></p>
+        </div>
+      </div>
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center gap-4">
+        <div class="p-4 rounded-2xl bg-amber-50 text-amber-600">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">行业中位数</p>
+          <p class="text-3xl font-extrabold text-slate-950 mt-1">19.1k<span class="text-lg font-normal text-slate-400">/月</span></p>
+        </div>
+      </div>
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center gap-4">
+        <div class="p-4 rounded-2xl bg-emerald-50 text-emerald-600">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">薪资竞争力指数</p>
+          <p class="text-3xl font-extrabold text-slate-950 mt-1">1.02<span class="text-lg font-normal text-emerald-500">↑</span></p>
+        </div>
+      </div>
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center gap-4">
+        <div class="p-4 rounded-2xl bg-rose-50 text-rose-600">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">结构失衡岗位</p>
+          <p class="text-3xl font-extrabold text-slate-950 mt-1">0<span class="text-lg font-normal text-slate-400">个</span></p>
+        </div>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+        <h3 class="font-bold text-slate-900 mb-6 flex items-center gap-3">各岗位薪资 vs 行业中位<span class="text-xs font-normal text-slate-400">（单位：K）</span></h3>
+        <div class="chart-box-container"><canvas id="salaryComp"></canvas></div>
+      </div>
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+        <h3 class="font-bold text-slate-900 mb-6">薪资结构占比（全公司）</h3>
+        <div class="chart-box-container"><canvas id="salaryPie"></canvas></div>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+        <h3 class="font-bold text-slate-900 mb-6">各地区分公司薪资对比</h3>
+        <div class="chart-box-container"><canvas id="citySalary"></canvas></div>
+      </div>
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+        <h3 class="font-bold text-slate-900 mb-6 flex items-center gap-3">薪资增长率趋势对比<span class="text-xs font-normal text-slate-400">（百分比）</span></h3>
+        <div class="chart-box-container"><canvas id="salaryGrowth"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="p3" class="tab-content hidden animate-fade-in">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">招聘总投入</p>
+        <p class="text-3xl font-extrabold text-slate-950 mt-2">25.2<span class="text-xl font-medium">万</span></p>
+      </div>
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">人均招聘成本</p>
+        <p class="text-3xl font-extrabold text-slate-950 mt-2">3.5<span class="text-xl font-medium">k/人</span></p>
+      </div>
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">ROI 最优渠道</p>
+        <p class="text-3xl font-extrabold text-indigo-600 mt-2">内推</p>
+      </div>
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">内推到岗率</p>
+        <p class="text-3xl font-extrabold text-emerald-600 mt-2">23<span class="text-xl font-medium">%</span></p>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+        <h3 class="font-bold text-slate-900 mb-6 flex items-center justify-between">招聘渠道详细运营数据
+            <span class="text-xs px-3 py-1 bg-slate-100 text-slate-500 rounded-full font-normal">Q1 数据</span>
+        </h3>
+        <div class="overflow-x-auto grow">
+          <table class="w-full text-sm text-left">
+            <thead class="text-xs text-slate-500 uppercase font-medium bg-slate-50/50 rounded-lg">
+              <tr>
+                <th class="px-4 py-3 rounded-l-lg">渠道</th>
+                <th class="px-3 py-3 text-right">投入(万)</th>
+                <th class="px-3 py-3 text-right">简历</th>
+                <th class="px-3 py-3 text-right">到岗</th>
+                <th class="px-3 py-3 text-right">人均(K)</th>
+                <th class="px-4 py-3 text-right rounded-r-lg">ROI</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr class="hover:bg-indigo-50/30 transition-colors"><td class="px-4 py-3.5 font-semibold text-slate-800">Boss直聘</td><td class="px-3 py-3 text-right">3.2</td><td class="px-3 py-3 text-right">420</td><td class="px-3 py-3 text-right">18</td><td class="px-3 py-3 text-right">1.8</td><td class="px-4 py-3 text-right font-bold text-slate-900">5.63</td></tr>
+              <tr class="hover:bg-indigo-50/30 transition-colors"><td class="px-4 py-3.5 font-semibold text-slate-800">猎聘</td><td class="px-3 py-3 text-right text-rose-600">8.5</td><td class="px-3 py-3 text-right">180</td><td class="px-3 py-3 text-right">12</td><td class="px-3 py-3 text-right text-rose-600">7.1</td><td class="px-4 py-3 text-right text-slate-400">1.41</td></tr>
+              <tr class="hover:bg-emerald-50 transition-colors"><td class="px-4 py-3.5 font-semibold text-emerald-700">内推 (推荐)</td><td class="px-3 py-3 text-right text-emerald-600">1.2</td><td class="px-3 py-3 text-right">65</td><td class="px-3 py-3 text-right">15</td><td class="px-3 py-3 text-right text-emerald-600 font-bold">0.8</td><td class="px-4 py-3 text-right font-black text-emerald-600 text-base">12.5</td></tr>
+              <tr class="hover:bg-indigo-50/30 transition-colors"><td class="px-4 py-3.5 font-semibold text-slate-800">51Job</td><td class="px-3 py-3 text-right">2.8</td><td class="px-3 py-3 text-right">310</td><td class="px-3 py-3 text-right">8</td><td class="px-3 py-3 text-right">3.5</td><td class="px-4 py-3 text-right text-slate-900">2.86</td></tr>
+              <tr class="hover:bg-indigo-50/30 transition-colors"><td class="px-4 py-3.5 font-semibold text-slate-800">LinkedIn</td><td class="px-3 py-3 text-right">5.0</td><td class="px-3 py-3 text-right">95</td><td class="px-3 py-3 text-right">7</td><td class="px-3 py-3 text-right">7.1</td><td class="px-4 py-3 text-right text-slate-400">1.40</td></tr>
+              <tr class="hover:bg-indigo-50/30 transition-colors"><td class="px-4 py-3.5 font-semibold text-slate-800 rounded-b-lg">校招</td><td class="px-3 py-3 text-right">4.5</td><td class="px-3 py-3 text-right">380</td><td class="px-3 py-3 text-right rounded-b-lg">11</td><td class="px-3 py-3 text-right rounded-b-lg">4.1</td><td class="px-4 py-3 text-right text-slate-900rounded-b-lg">2.44</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+        <h3 class="font-bold text-slate-900 mb-6">各渠道整体 ROI 转化率排行</h3>
+        <div class="chart-box-container"><canvas id="roiChart"></canvas></div>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+        <h3 class="font-bold text-slate-900 mb-6">渠道简历获取量 vs 成功到岗转化</h3>
+        <div class="chart-box-container"><canvas id="cvChart"></canvas></div>
+      </div>
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+        <h3 class="font-bold text-slate-900 mb-6 flex items-center gap-3">近半年重点渠道投入趋势<span class="text-xs font-normal text-slate-400">（万/月）</span></h3>
+        <div class="chart-box-container"><canvas id="channelTrend"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="p4" class="tab-content animate-fade-in">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">内部人才库总量</p>
+        <p class="text-3xl font-extrabold text-slate-950 mt-2">526<span class="text-xl font-medium">人</span></p>
+      </div>
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">本月高匹配候选人</p>
+        <p class="text-3xl font-extrabold text-indigo-600 mt-2">11<span class="text-xl font-medium text-slate-400">/人</span></p>
+      </div>
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">高匹配者平均匹配度</p>
+        <p class="text-3xl font-extrabold text-slate-950 mt-2">83<span class="text-xl font-medium">分</span></p>
+      </div>
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">意向强烈可立即联系</p>
+        <p class="text-3xl font-extrabold text-emerald-600 mt-2">15<span class="text-xl font-medium">人</span></p>
+      </div>
+    </div>
+    <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 mb-8 overflow-hidden">
+      <h3 class="font-bold text-slate-900 mb-6 flex items-center justify-between">当前岗位 TOP3 推荐候选人<span class="text-sm font-medium text-indigo-600 cursor-pointer">查看全部匹配结果 →</span></h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="relative bg-slate-50 rounded-2xl p-6 border border-slate-100 group hover:border-indigo-100 hover:bg-indigo-50/50 transition-all">
+          <span class="absolute top-4 right-4 text-xs px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full font-medium">求职中</span>
+          <p class="font-bold text-lg text-slate-900">张晓明 · 高级产品经理</p>
+          <p class="text-sm text-slate-500 mt-1">7年经验 · 移动互联网 · 985硕士</p>
+          <p class="text-indigo-600 font-extrabold text-3xl mt-4">92<span class="text-xl font-bold">分</span></p>
+          <p class="text-xs text-slate-400 mt-1">深度匹配当前岗位 JD 要求</p>
+        </div>
+        <div class="relative bg-slate-50 rounded-2xl p-6 border border-slate-100 group hover:border-amber-100 hover:bg-amber-50/50 transition-all">
+            <span class="absolute top-4 right-4 text-xs px-3 py-1 bg-amber-100 text-amber-700 rounded-full font-medium">在职考虑</span>
+            <p class="font-bold text-lg text-slate-900">李雪梅 · 产品总监</p>
+            <p class="text-sm text-slate-500 mt-1">10年经验 · 电商巨头 · 曾任职阿里</p>
+            <p class="text-amber-600 font-extrabold text-3xl mt-4">88<span class="text-xl font-bold">分</span></p>
+            <p class="text-xs text-slate-400 mt-1">经验丰富，具备业务领导力</p>
+        </div>
+        <div class="relative bg-slate-50 rounded-2xl p-6 border border-slate-100 group hover:border-indigo-100 hover:bg-indigo-50/50 transition-all">
+            <span class="absolute top-4 right-4 text-xs px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full font-medium">求职中</span>
+            <p class="font-bold text-lg text-slate-900">王建国 · 资深产品经理</p>
+            <p class="text-sm text-slate-500 mt-1">6年经验 · 金融科技 · 懂技术背景</p>
+            <p class="text-indigo-600 font-extrabold text-3xl mt-4">85<span class="text-xl font-bold">分</span></p>
+            <p class="text-xs text-slate-400 mt-1">硬技能过硬，即战力强</p>
+        </div>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+        <h3 class="font-bold text-slate-900 mb-6">全库候选人匹配度分数分布<span class="text-xs font-normal text-slate-400">（人数）</span></h3>
+        <div class="chart-box-container"><canvas id="matchDist"></canvas></div>
+      </div>
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+        <h3 class="font-bold text-slate-900 mb-6">候选人主要来源行业分布</h3>
+        <div class="chart-box-container"><canvas id="industryPie2"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="p5" class="tab-content hidden animate-fade-in">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">高离职风险员工</p>
+        <p class="text-3xl font-extrabold text-rose-600 mt-2">4<span class="text-xl font-medium text-slate-400">人</span></p>
+        <p class="text-xs text-rose-500 mt-1 font-medium">需核心管理层立即介入</p>
+      </div>
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">中风险员工</p>
+        <p class="text-3xl font-extrabold text-amber-600 mt-2">3<span class="text-xl font-medium text-slate-400">人</span></p>
+        <p class="text-xs text-amber-500 mt-1 font-medium">建议 HR 或部门TL约谈</p>
+      </div>
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">本月预测离职</p>
+        <p class="text-3xl font-extrabold text-slate-950 mt-2">3<span class="text-xl font-medium">人</span></p>
+        <p class="text-xs text-slate-400 mt-1">模型加权预测</p>
+      </div>
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">公司年度离职率</p>
+        <p class="text-3xl font-extrabold text-slate-950 mt-2">14.8<span class="text-xl font-medium">%</span></p>
+        <p class="text-xs text-slate-400 mt-1">行业基准值12%</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 overflow-hidden">
+        <h3 class="font-bold text-slate-900 mb-6 flex items-center justify-between">高离职风险员工预警名单
+          <span class="text-xs px-3 py-1 bg-rose-100 text-rose-700 rounded-full font-medium">Top 关注</span>
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left">
+            <thead class="text-xs text-slate-500 uppercase font-medium bg-slate-50/50 rounded-lg">
+              <tr>
+                <th class="px-4 py-3 rounded-l-lg">姓名</th>
+                <th class="px-3 py-3">部门</th>
+                <th class="px-3 py-3">主要原因预判</th>
+                <th class="px-3 py-3 text-center">风险分</th>
+                <th class="px-4 py-3 rounded-r-lg">建议行动</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr class="hover:bg-rose-50/50 transition-colors"><td class="px-4 py-3.5 font-semibold text-slate-800">周小华</td><td class="px-3 py-3 text-slate-600">技术-后端</td><td class="px-3 py-3 text-slate-600">薪资大幅低于市场价(-15%)</td><td class="px-3 py-3 text-center font-bold text-rose-600">88</td><td class="px-4 py-3"><span class="px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-xs font-medium">紧急加薪/约谈</span></td></tr>
+              <tr class="hover:bg-rose-50/50 transition-colors"><td class="px-4 py-3.5 font-semibold text-slate-800">吴敏</td><td class="px-3 py-3 text-slate-600">销售-华北</td><td class="px-3 py-3 text-slate-600">连续2月业绩未达标/压力过大</td><td class="px-3 py-3 text-center font-bold text-rose-600">82</td><td class="px-4 py-3"><span class="px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-xs font-medium">业绩复盘/辅导</span></td></tr>
+              <tr class="hover:bg-rose-50/50 transition-colors"><td class="px-4 py-3.5 font-semibold text-slate-800">郑浩</td><td class="px-3 py-3 text-slate-600">产品-供应链</td><td class="px-3 py-3 text-slate-600">晋升停滞/反馈管理风格差异</td><td class="px-3 py-3 text-center font-bold text-rose-600">79</td><td class="px-4 py-3"><span class="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">更换业务线尝试</span></td></tr>
+              <tr class="hover:bg-slate-50 transition-colors"><td class="px-4 py-3.5 font-medium text-slate-700 rounded-b-lg">林凡</td><td class="px-3 py-3 text-slate-500 rounded-b-lg">人力-BP</td><td class="px-3 py-3 text-slate-500 rounded-b-lg">工作负荷过重/缺乏发展空间</td><td class="px-3 py-3 text-center text-slate-500 rounded-b-lg">52 (中)</td><td class="px-4 py-3 rounded-b-lg"><span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-medium">常规关怀</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 flex flex-col items-center">
+        <h3 class="font-bold text-slate-900 mb-6 w-full text-left">整体离职风险等级分布 (环形图)</h3>
+        <div class="chart-box-container grow"><canvas id="riskPie2"></canvas></div>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+        <h3 class="font-bold text-slate-900 mb-6">全公司离职主要风险因子分析<span class="text-xs font-normal text-slate-400">（百分比影响度）</span></h3>
+        <div class="chart-box-container"><canvas id="factor2"></canvas></div>
+      </div>
+      <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+        <h3 class="font-bold text-slate-900 mb-6 flex items-center justify-between">近 12 个月离职率动态趋势线
+            <span class="text-xs px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full font-medium">基准：12%</span>
+        </h3>
+        <div class="chart-box-container"><canvas id="trend2"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ===============================
+  // JS 界面交互逻辑
+  // ===============================
+
+  // 默认选中的 Tab 标识
+  let currentTabId = 'p4';
+
+  // 用于计算和更新 Tab Slider 位置的函数
+  function updateTabSlider() {
+    const activeTabButton = document.querySelector(`.tab-content:not(.hidden)`) ? 
+                            document.querySelector(`.tab[onclick*="${currentTabId}"]`) : 
+                            document.getElementById('defaultTab');
+    if (!activeTabButton) return;
+    
+    const slider = document.getElementById('tabSlider');
+    slider.style.width = `${activeTabButton.offsetWidth}px`;
+    slider.style.left = `${activeTabButton.offsetLeft}px`;
+  }
+
+  // Tab 切换逻辑
+  function show(id, btn) {
+    currentTabId = id;
+    // 1. 更新所有按钮样式
+    document.querySelectorAll('.tab').forEach(t => {
+      t.classList.remove('text-indigo-700', 'font-bold');
+      t.classList.add('text-slate-600', 'font-semibold');
+    });
+    // 2. 更新选中按钮样式
+    btn.classList.add('text-indigo-700', 'font-bold');
+    btn.classList.remove('text-slate-600', 'font-semibold');
+
+    // 3. 切换内容显示
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    const targetContent = document.getElementById(id);
+    targetContent.classList.remove('hidden');
+
+    // 4. 更新 Slider 位置
+    updateTabSlider();
+  }
+
+  // 绑定窗口调整大小事件，确保 Slider 位置始终正确
+  window.addEventListener('resize', updateTabSlider);
+
+  // 初始化 Tab Slider
+  updateTabSlider();
+
+
+  // ===============================
+  // 功能逻辑 (PNG 导出, 文件导入)
+  // ===============================
+
+  // 完整保留原有的 PNG 导出逻辑
+  async function exportPNG() {
+    const el = document.body; // 导出整个页面
+    const canvas = await html2canvas(el, { 
+        scale: 2, 
+        useCORS: true, 
+        backgroundColor: '#F8FAFC', // Slate-50 背景色
+        onclone: (clonedDoc) => {
+            // 这里可以确保 clonedDoc 中的 Slider 也是在正确位置
+        }
+    });
+    const link = document.createElement('a');
+    link.download = 'HR智慧看板全景报告_2025.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }
+
+  // 完整保留原有的数据导入逻辑
+  document.getElementById('importFile').addEventListener('change', e => {
+    if(e.target.files[0]) {
+      // 在实际应用中，这里会解析文件并重新渲染图表数据
+      alert('数据已导入：' + e.target.files[0].name + '。实际应用中会更新以下图表数据。');
+    }
+  });
+
+
+  // ===============================
+  // Chart.js 图表渲染逻辑
+  // ===============================
+  
+  // ✅ 核心美化点：莫兰迪色系 Chart.js 全局优化
+  // 这里我们不在 options 层面强制 maintainAspectRatio，而是通过外部 CSS 容器实现居中防拉伸。
+  Chart.defaults.font.family = "'Inter', sans-serif";
+  Chart.defaults.color = "#64748B"; // Slate-500 用于刻度
+  Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(15, 23, 42, 0.9)'; // Slate-950 用于提示
+  
+  const morandiColors = ['#A3A6F4', '#84E2D1', '#FCD982', '#FCA5A5', '#94A3B8', '#A7F3D0', '#DDD6FE', '#F87171'];
+  
+  // 通用 Chart 配置项
+  const baseChartConfig = {
+    responsive: true,
+    // maintainAspectRatio: true, // 保留默认行为，Canvas 会保持纵横比
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: {
+          padding: 20,
+          usePointStyle: true,
+          font: { size: 12 }
+        }
+      },
+      tooltip: { enabled: true, mode: 'index', intersect: false }
+    },
+    scales: {
+      x: { grid: { display: false } },
+      y: { grid: { color: '#F1F5F9' }, ticks: { padding: 8 } }
+    }
+  };
+
+  const doughnutConfig = {
+    responsive: true,
+    // maintainAspectRatio: true,
+    plugins: {
+      legend: { position: 'bottom', labels: { padding: 25, usePointStyle: true } }
+    },
+    scales: { x: { display: false }, y: { display: false } }
+  };
+
+
+  // *** P2 薪资图表渲染 ***
+  const ctxSalary = document.getElementById('salaryComp').getContext('2d');
+  new Chart(ctxSalary, {
+    type: 'bar',
+    data: {
+      labels: ['产品经理', '前端研发', '后端研发', 'UI设计', '数据分析', '销售经理', 'HR BP', '市场运营'],
+      datasets: [
+        { label: '公司薪资(K)', data: [22, 24, 27, 18, 20, 19, 11, 14], backgroundColor: '#5154E8', borderRadius: 8, barThickness: 24 },
+        { label: '行业中位(K)', data: [20, 25, 26, 17, 22, 18, 12, 13], backgroundColor: '#E2E8F0', borderRadius: 8, barThickness: 24 }
+      ]
+    },
+    options: { ...baseChartConfig }
+  });
+
+  const ctxSalaryPie = document.getElementById('salaryPie').getContext('2d');
+  new Chart(ctxSalaryPie, {
+    type: 'doughnut',
+    data: {
+      labels: ['后端研发', '前端研发', '产品', '销售', '数据', 'UI设计', 'HR', '市场'],
+      datasets: [{
+        data: [31, 22.9, 11.3, 12.9, 8.2, 6.1, 3.8, 4.3],
+        backgroundColor: morandiColors,
+        borderWidth: 0
+      }]
+    },
+    options: { ...doughnutConfig, cutout: '70%' }
+  });
+
+  const ctxCitySalary = document.getElementById('citySalary').getContext('2d');
+  new Chart(ctxCitySalary, {
+    type: 'bar',
+    data: {
+      labels: ['北京总', '上海分', '深圳分', '广州分', '杭州分', '成都分', '武汉分'],
+      datasets: [{
+        label: '均薪(K)',
+        data: [28, 27, 26, 22, 24, 18, 17],
+        backgroundColor: morandiColors,
+        borderRadius: 8,
+        barPercentage: 0.6
+      }]
+    },
+    options: { ...baseChartConfig }
+  });
+
+  const ctxSalaryGrowth = document.getElementById('salaryGrowth').getContext('2d');
+  new Chart(ctxSalaryGrowth, {
+    type: 'line',
+    data: {
+      labels: ['2022H1', '2022H2', '2023H1', '2023H2', '2024H1', '2024H2'],
+      datasets: [
+        { label: '公司均薪增长率', data: [5.5, 6.2, 7.1, 8.0, 7.5, 6.9], borderColor: '#5154E8', backgroundColor: 'rgba(81, 84, 232, 0.1)', tension: 0.4, fill: true, pointRadius: 4 },
+        { label: '行业基准增长率', data: [5.2, 6.5, 6.2, 6.8, 6.5, 6.0], borderColor: '#CBD5E1', tension: 0.4, pointRadius: 0, borderDash: [5, 5] }
+      ]
+    },
+    options: { ...baseChartConfig }
+  });
+
+
+  // *** P3 招聘渠道图表渲染 ***
+  const ctxRoiChart = document.getElementById('roiChart').getContext('2d');
+  new Chart(ctxRoiChart, {
+    type: 'bar',
+    data: {
+      labels: ['内推 (12.5)', 'Boss (5.63)', '51job (2.86)', '校招 (2.44)', '猎聘 (1.41)', 'LinkedIn (1.4)'],
+      datasets: [{
+        label: '整体 ROI 指数',
+        data: [12.5, 5.63, 2.86, 2.44, 1.41, 1.40],
+        backgroundColor: [morandiColors[1], morandiColors[0], morandiColors[4], morandiColors[4], morandiColors[3], morandiColors[3]],
+        borderRadius: 8,
+        barThickness: 24
+      }]
+    },
+    options: { ...baseChartConfig, indexAxis: 'y' } // 横向柱状图
+  });
+
+  const ctxCvChart = document.getElementById('cvChart').getContext('2d');
+  new Chart(ctxCvChart, {
+    type: 'bar',
+    data: {
+      labels: ['Boss', '猎聘', '内推', '51job', 'LinkedIn', '校招'],
+      datasets: [
+        { label: '简历获取量', data: [420, 180, 65, 310, 95, 380], backgroundColor: '#CBD5E1', borderRadius: 8 },
+        { label: '成功到岗人数', data: [18, 12, 15, 8, 7, 11], backgroundColor: '#5154E8', borderRadius: 8 }
+      ]
+    },
+    options: { ...baseChartConfig }
+  });
+
+  const ctxChannelTrend = document.getElementById('channelTrend').getContext('2d');
+  new Chart(ctxChannelTrend, {
+    type: 'line',
+    data: {
+      labels: ['Q4 10', 'Q4 11', 'Q4 12', 'Q1 01', 'Q1 02', 'Q1 03'],
+      datasets: [
+        { label: 'Boss直聘', data: [2.0, 2.2, 2.3, 2.4, 2.5, 2.6], borderColor: morandiColors[0], tension: 0.4, pointRadius: 0 },
+        { label: '猎聘网', data: [8.0, 8.2, 8.3, 8.4, 8.5, 8.6], borderColor: morandiColors[2], tension: 0.4, pointRadius: 0 },
+        { label: '内推活动', data: [1.5, 1.6, 1.7, 1.8, 1.9, 2.0], borderColor: morandiColors[1], tension: 0.4, pointRadius: 0 },
+        { label: '51Job', data: [2.8, 2.9, 3.0, 3.1, 3.2, 3.3], borderColor: morandiColors[3], tension: 0.4, pointRadius: 0 }
+      ]
+    },
+    options: { ...baseChartConfig, scales: { ...baseChartConfig.scales, y: { ...baseChartConfig.scales.y, min: 0 } } }
+  });
+
+
+  // *** P4 人才库图表渲染 ***
+  const ctxMatchDist = document.getElementById('matchDist').getContext('2d');
+  new Chart(ctxMatchDist, {
+    type: 'bar',
+    data: {
+      labels: ['60-70分', '70-80分 (中匹配)', '80-85分 (较高)', '85-90分 (高匹配)', '90分+ (完美匹配)'],
+      datasets: [{
+        label: '全库候选人数分布',
+        data: [45, 128, 82, 56, 16],
+        backgroundColor: [morandiColors[4], morandiColors[4], morandiColors[2], morandiColors[0], morandiColors[1]],
+        borderRadius: 8,
+        barThickness: 32
+      }]
+    },
+    options: { ...baseChartConfig, scales: { ...baseChartConfig.scales, y: { ...baseChartConfig.scales.y, grid: { display: false } } } }
+  });
+
+  const ctxIndustryPie = document.getElementById('industryPie2').getContext('2d');
+  new Chart(ctxIndustryPie, {
+    type: 'pie',
+    data: {
+      labels: ['移动互联网', '电商巨头', '金融科技', 'SaaS企业', '大型游戏', '传统IT/其他'],
+      datasets: [{
+        data: [35.1, 17.5, 14.8, 12.3, 8.5, 11.8],
+        backgroundColor: morandiColors,
+        borderWidth: 0
+      }]
+    },
+    options: doughnutConfig // 饼图通用配置
+  });
+
+
+  // *** P5 离职风险图表渲染 ***
+  const ctxRiskPie = document.getElementById('riskPie2').getContext('2d');
+  new Chart(ctxRiskPie, {
+    type: 'doughnut',
+    data: {
+      labels: ['高风险 (立即联系)', '中风险 (关怀约谈)', '低风险 (正常关注)'],
+      datasets: [{
+        data: [50, 37.5, 12.5],
+        backgroundColor: ['#F87171', '#FBBF24', '#F1F5F9'], // 这里的低风险不显示莫兰迪色，用 Slate-100 作为底色
+        borderWidth: 0
+      }]
+    },
+    // ✅ 核心配置：环形图不显示默认 XY 刻度线
+    options: { ...doughnutConfig, cutout: '75%' } 
+  });
+
+  const ctxFactor = document.getElementById('factor2').getContext('2d');
+  new Chart(ctxFactor, {
+    type: 'bar',
+    data: {
+      labels: ['薪资倒挂/大幅低于行业', '发展停滞/职业瓶颈', '内部晋升路径不畅', '工作负荷过重/压力大', '团队氛围差异/风格冲突', '管理风格反馈偏差'],
+      datasets: [{
+        label: '离职因子影响度(SHAP模型)',
+        data: [82, 72, 68, 55, 45, 38],
+        backgroundColor: '#FCA5A5', // 柔和红
+        borderRadius: 8,
+        barThickness: 16
+      }]
+    },
+    options: { ...baseChartConfig, indexAxis: 'y' } // 横向柱状图
+  });
+
+  const ctxTrend = document.getElementById('trend2').getContext('2d');
+  new Chart(ctxTrend, {
+    type: 'line',
+    data: {
+      labels: ['Q2 04', 'Q2 05', 'Q2 06', 'Q3 07', 'Q3 08', 'Q3 09', 'Q4 10', 'Q4 11', 'Q4 12', 'Q1 01', 'Q1 02', 'Q1 03'],
+      datasets: [
+        { label: '公司年度离职率 (滑动12月)', data: [13.2, 12.8, 11.5, 10.2, 12.0, 13.8, 15.2, 12.5, 13.1, 14.6, 14.8, 14.8], borderColor: '#5154E8', tension: 0.4, fill: true, backgroundColor: 'rgba(81, 84, 232, 0.05)', pointRadius: 4 },
+        { label: '行业均值基准线 (12.0%)', data: Array(12).fill(12.0), borderColor: '#F87171', tension: 0, pointRadius: 0, borderDash: [6, 6] }
+      ]
+    },
+    options: { ...baseChartConfig }
+  });
+
+</script>
+</body>
+</html>
